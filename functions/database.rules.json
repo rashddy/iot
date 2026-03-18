@@ -1,0 +1,193 @@
+{
+  "rules": {
+    // ============================================
+    // Global Rules
+    // ============================================
+    ".read": false,
+    ".write": false,
+
+    // ============================================
+    // User Data (Device-scoped)
+    // ============================================
+    "users": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth.uid === $uid",
+
+        // Devices owned by user
+        "devices": {
+          "$deviceId": {
+            ".read": "auth.uid === $uid",
+            ".write": false, // Backend only
+
+            "schedules": {
+              "$scheduleId": {
+                ".read": "auth.uid === $uid",
+                ".write": false, // Backend only
+              }
+            },
+
+            "deviceShares": {
+              ".read": "auth.uid === $uid"
+            }
+          }
+        },
+
+        // User's history across all devices
+        "history": {
+          ".read": "auth.uid === $uid",
+          ".write": false, // Backend only
+        },
+
+        // User's commands across all devices
+        "commands": {
+          ".read": "auth.uid === $uid",
+          ".write": false, // Backend only
+        },
+
+        // Device shares granted to user
+        "deviceShares": {
+          ".read": "auth.uid === $uid",
+          ".write": false // Backend only
+        }
+      }
+    },
+
+    // ============================================
+    // Device-scoped Data (global access by backend)
+    // ============================================
+    "devices": {
+      "$deviceId": {
+        ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists() || 
+                   root.child('deviceShares').child($deviceId).child(auth.uid).exists()",
+        ".write": false, // Backend only
+
+        "telemetry": {
+          ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists()",
+          ".write": false
+        }
+      }
+    },
+
+    // ============================================
+    // Commands (Backend-managed)
+    // ============================================
+    "commands": {
+      "$deviceId": {
+        ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists()",
+        ".write": false, // Backend only
+
+        "$commandId": {
+          ".validate": "newData.hasChildren(['id', 'deviceId', 'userId', 'type', 'state', 'payload', 'idempotencyKey', 'createdAt', 'expiresAt', 'retryCount'])",
+          // Device can only write acknowledgement via POST /commands/acknowledge (not direct RTDB write)
+          ".write": false
+        }
+      }
+    },
+
+    // ============================================
+    // Schedules (Backend-managed)
+    // ============================================
+    "schedules": {
+      "$deviceId": {
+        ".read": "false", // Mobile reads via backend API only
+        ".write": false, // Backend only
+
+        "$scheduleId": {
+          ".validate": "newData.hasChildren(['id', 'deviceId', 'userId', 'time', 'amount', 'enabled', 'createdAt', 'updatedAt'])"
+        }
+      }
+    },
+
+    // ============================================
+    // History (Backend-managed, immutable)
+    // ============================================
+    "history": {
+      "$deviceId": {
+        ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists()",
+        ".write": false, // Backend only, immutable
+
+        "$entryId": {
+          ".validate": "newData.hasChildren(['id', 'deviceId', 'userId', 'timestamp', 'amount', 'status', 'triggeredBy'])"
+        }
+      }
+    },
+
+    // ============================================
+    // Food Container Status (Device can write)
+    // ============================================
+    "foodContainer": {
+      "$deviceId": {
+        ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists()",
+        ".write": "auth.uid.startsWith('device:') && auth.uid.endsWith($deviceId)", // Device-only
+        ".validate": "newData.hasChildren(['remainingGrams', 'maxCapacityGrams', 'lastUpdated'])",
+
+        "remainingGrams": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "maxCapacityGrams": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "lastUpdated": {
+          ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/)"
+        }
+      }
+    },
+
+    // ============================================
+    // Device Secrets (Backend only)
+    // ============================================
+    "_deviceSecrets": {
+      ".read": false,
+      ".write": false
+    },
+
+    // ============================================
+    // Command Deduplication (Backend only)
+    // ============================================
+    "_commandDedup": {
+      ".read": false,
+      ".write": false
+    },
+
+    // ============================================
+    // Rate Limiting Buckets (Backend only)
+    // ============================================
+    "_rateLimits": {
+      ".read": false,
+      ".write": false
+    },
+
+    // ============================================
+    // Device Sharing (Shared access)
+    // ============================================
+    "deviceShares": {
+      "$deviceId": {
+        "$sharedUserId": {
+          ".read": "auth.uid === $sharedUserId",
+          ".write": false // Backend only
+        }
+      }
+    },
+
+    // ============================================
+    // Audit Logs (Backend only, security-sensitive)
+    // ============================================
+    "auditLogs": {
+      ".read": false, // No direct client read; use backend API
+      ".write": false
+    },
+
+    // ============================================
+    // Telemetry (Recent data only)
+    // ============================================
+    "telemetry": {
+      "$deviceId": {
+        ".read": "root.child('users').child(auth.uid).child('devices').child($deviceId).exists()",
+        ".write": false // Backend only
+
+        // Entries indexed by timestamp
+      }
+    }
+  }
+}

@@ -1,98 +1,164 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+/**
+ * AquaFeed Pro – Main Dashboard Screen
+ * Shows food container, feeding schedules, feeding history, and demo controls.
+ */
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+    Alert,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    View,
+} from 'react-native';
+
+import AppHeader from '@/components/aquafeed/app-header';
+import DemoControls from '@/components/aquafeed/demo-controls';
+import FoodContainerCard from '@/components/aquafeed/food-container-card';
+import HistoryCard from '@/components/aquafeed/history-card';
+import ScheduleCard from '@/components/aquafeed/schedule-card';
+import ScheduleModal from '@/components/aquafeed/schedule-modal';
+
+import {
+    useDeviceStatus,
+    useFoodContainer,
+    useHistory,
+    useSchedules,
+} from '@/hooks/use-firebase';
+
+import {
+    addSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    updateSchedule,
+} from '@/services/firebase-service';
+
+import type { FeedingSchedule } from '@/types/feeder';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { schedules } = useSchedules();
+  const { history } = useHistory();
+  const { food } = useFoodContainer();
+  const { status } = useDeviceStatus();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingSchedule, setEditingSchedule] =
+    useState<FeedingSchedule | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  /* ---- Schedule CRUD ---- */
+
+  const handleAddPress = useCallback(() => {
+    setEditingSchedule(null);
+    setModalVisible(true);
+  }, []);
+
+  const handleEditPress = useCallback((schedule: FeedingSchedule) => {
+    setEditingSchedule(schedule);
+    setModalVisible(true);
+  }, []);
+
+  const handleToggle = useCallback(async (id: string, enabled: boolean) => {
+    try {
+      await toggleSchedule(id, enabled);
+    } catch {
+      Alert.alert('Error', 'Failed to toggle schedule.');
+    }
+  }, []);
+
+  const handleDelete = useCallback(async (id: string) => {
+    Alert.alert('Delete Schedule', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteSchedule(id);
+          } catch {
+            Alert.alert('Error', 'Failed to delete schedule.');
+          }
+        },
+      },
+    ]);
+  }, []);
+
+  const handleSaveSchedule = useCallback(
+    async (data: { time: string; amount: number }) => {
+      try {
+        if (editingSchedule) {
+          await updateSchedule({
+            ...editingSchedule,
+            time: data.time,
+            amount: data.amount,
+          });
+        } else {
+          await addSchedule({
+            time: data.time,
+            amount: data.amount,
+            enabled: true,
+          });
+        }
+        setModalVisible(false);
+      } catch {
+        Alert.alert('Error', 'Failed to save schedule.');
+      }
+    },
+    [editingSchedule],
+  );
+
+  /* ---- Pull to refresh (no-op since Firebase is real-time) ---- */
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 800);
+  }, []);
+
+  return (
+    <View style={styles.root}>
+      <AppHeader deviceOnline={status?.online} />
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <FoodContainerCard food={food} />
+
+        <ScheduleCard
+          schedules={schedules}
+          onAdd={handleAddPress}
+          onToggle={handleToggle}
+          onEdit={handleEditPress}
+          onDelete={handleDelete}
+        />
+
+        <HistoryCard history={history} />
+
+        <DemoControls />
+      </ScrollView>
+
+      <ScheduleModal
+        visible={modalVisible}
+        schedule={editingSchedule}
+        onSave={handleSaveSchedule}
+        onClose={() => setModalVisible(false)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  root: {
+    flex: 1,
+    backgroundColor: '#f7f6fd',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  scroll: {
+    flex: 1,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  scrollContent: {
+    paddingBottom: 40,
   },
 });
