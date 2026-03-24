@@ -22,13 +22,14 @@ import { getDatabase } from 'firebase/database';
  * 6. Copy the config values below
  */
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-  databaseURL: 'https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: "AIzaSyCtDFFhoUeggflsweDPtNnZCRk3_pBKOd4",
+  authDomain: "iotfeeder-57d4b.firebaseapp.com",
+  databaseURL: "https://iotfeeder-57d4b-default-rtdb.firebaseio.com",
+  projectId: "iotfeeder-57d4b",
+  storageBucket: "iotfeeder-57d4b.firebasestorage.app",
+  messagingSenderId: "580931369227",
+  appId: "1:580931369227:web:9a12ff01ef7404a66a8a0e",
+  measurementId: "G-Z670FVQPWV"
 };
 
 const app = initializeApp(firebaseConfig);

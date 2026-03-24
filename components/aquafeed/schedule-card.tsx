@@ -28,6 +28,28 @@ export default function ScheduleCard({
   onEdit,
   onDelete,
 }: Props) {
+  // Convert 24-hour time to 12-hour format for display
+  const formatTime12Hour = (time24: string) => {
+    const [hours, minutes] = time24.split(':');
+    const h24 = parseInt(hours, 10);
+    
+    let h12 = h24;
+    let ampm = 'AM';
+    
+    if (h24 === 0) {
+      h12 = 12;
+      ampm = 'AM';
+    } else if (h24 === 12) {
+      h12 = 12;
+      ampm = 'PM';
+    } else if (h24 > 12) {
+      h12 = h24 - 12;
+      ampm = 'PM';
+    }
+    
+    return `${h12}:${minutes} ${ampm}`;
+  };
+
   const renderItem = ({ item }: { item: FeedingSchedule }) => (
     <View
       style={[
@@ -42,7 +64,7 @@ export default function ScheduleCard({
         thumbColor={item.enabled ? '#6367FF' : '#f4f3f4'}
       />
       <View style={styles.scheduleInfo}>
-        <Text style={styles.scheduleTime}>{item.time}</Text>
+        <Text style={styles.scheduleTime}>{formatTime12Hour(item.time)}</Text>
         <Text style={styles.scheduleAmount}>{item.amount}g per feed</Text>
       </View>
       <View style={styles.actions}>

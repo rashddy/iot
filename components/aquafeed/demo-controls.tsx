@@ -7,7 +7,7 @@ import {
     initFoodContainer,
     setFoodRemaining,
     triggerManualFeed,
-} from '@/services/firebase-service';
+} from '@/services/supabase-service';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -37,14 +37,25 @@ export default function DemoControls() {
       Alert.alert('Invalid', 'Enter a valid amount.');
       return;
     }
+    
+    // Get current food amount and decrease it
+    const currentFood = parseInt(foodInput, 10);
+    const newAmount = Math.max(0, currentFood - amount);
+    
+    // Update food container first
+    await setFoodRemaining(newAmount);
+    setFoodInput(newAmount.toString());
+    
+    // Then add history entry
     await triggerManualFeed(amount);
-
     await addHistoryEntry({
       timestamp: new Date().toISOString().replace('T', ' at ').slice(0, 22),
       amount,
       status: 'completed',
       triggeredBy: 'manual',
     });
+    
+    Alert.alert('Success', `${amount}g dispensed. Remaining: ${newAmount}g`);
   };
 
   const handleInitDB = async () => {

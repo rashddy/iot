@@ -29,42 +29,81 @@ export default function ScheduleModal({
   onSave,
   onClose,
 }: Props) {
-  const [hours, setHours] = useState('08');
+  const [hours, setHours] = useState('8');
   const [minutes, setMinutes] = useState('00');
+  const [ampm, setAmpm] = useState<'AM' | 'PM'>('AM');
   const [amount, setAmount] = useState('5');
 
   useEffect(() => {
     if (schedule) {
-      const [h, m] = schedule.time.split(':');
-      setHours(h);
+      const [h24, m] = schedule.time.split(':');
+      const h24Num = parseInt(h24, 10);
+      
+      // Convert 24-hour to 12-hour
+      let h12 = h24Num;
+      let newAmpm = 'AM';
+      
+      if (h24Num === 0) {
+        h12 = 12;
+        newAmpm = 'AM';
+      } else if (h24Num === 12) {
+        h12 = 12;
+        newAmpm = 'PM';
+      } else if (h24Num > 12) {
+        h12 = h24Num - 12;
+        newAmpm = 'PM';
+      }
+      
+      setHours(String(h12));
       setMinutes(m);
+      setAmpm(newAmpm as 'AM' | 'PM');
       setAmount(String(schedule.amount));
     } else {
-      setHours('08');
+      setHours('8');
       setMinutes('00');
+      setAmpm('AM');
       setAmount('5');
     }
   }, [schedule, visible]);
 
   const handleSave = () => {
-    const h = parseInt(hours, 10);
+    console.log('Save clicked - hours:', hours, 'minutes:', minutes, 'amount:', amount, 'ampm:', ampm);
+    
+    const h12 = parseInt(hours, 10);
     const m = parseInt(minutes, 10);
     const a = parseInt(amount, 10);
 
-    if (isNaN(h) || h < 0 || h > 23) {
-      Alert.alert('Invalid', 'Hours must be between 0 and 23.');
+    console.log('Parsed values - h12:', h12, 'm:', m, 'a:', a);
+
+    // Validate 12-hour input
+    if (isNaN(h12) || h12 < 1 || h12 > 12) {
+      console.log('Hour validation failed');
+      Alert.alert('Invalid', 'Hours must be between 1 and 12.');
       return;
     }
     if (isNaN(m) || m < 0 || m > 59) {
+      console.log('Minute validation failed');
       Alert.alert('Invalid', 'Minutes must be between 0 and 59.');
       return;
     }
-    if (isNaN(a) || a <= 0 || a > 100) {
-      Alert.alert('Invalid', 'Amount must be between 1 and 100 grams.');
+    if (isNaN(a) || a <= 0 || a > 500) {
+      console.log('Amount validation failed');
+      Alert.alert('Invalid', 'Amount must be between 1 and 500 grams.');
       return;
     }
 
-    const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    // Convert 12-hour to 24-hour for Firebase
+    let h24 = h12;
+    if (ampm === 'PM' && h12 !== 12) {
+      h24 = h12 + 12;
+    } else if (ampm === 'AM' && h12 === 12) {
+      h24 = 0;
+    }
+
+    const time = `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    console.log('Final time string:', time);
+    
+    console.log('Calling onSave with:', { time, amount: a });
     onSave({ time, amount: a });
   };
 
@@ -106,6 +145,20 @@ export default function ScheduleModal({
               placeholder="MM"
               placeholderTextColor="#a5a5c0"
             />
+            <View style={styles.ampmContainer}>
+              <TouchableOpacity
+                style={[styles.ampmButton, ampm === 'AM' && styles.ampmButtonActive]}
+                onPress={() => setAmpm('AM')}
+              >
+                <Text style={[styles.ampmText, ampm === 'AM' && styles.ampmTextActive]}>AM</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ampmButton, ampm === 'PM' && styles.ampmButtonActive]}
+                onPress={() => setAmpm('PM')}
+              >
+                <Text style={[styles.ampmText, ampm === 'PM' && styles.ampmTextActive]}>PM</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={styles.label}>Amount (grams)</Text>
@@ -201,6 +254,29 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontFamily: 'Montserrat_700Bold',
     color: '#6367FF',
+  },
+  ampmContainer: {
+    flexDirection: 'column',
+    marginLeft: 8,
+  },
+  ampmButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0eeff',
+    marginVertical: 2,
+  },
+  ampmButtonActive: {
+    backgroundColor: '#6367FF',
+  },
+  ampmText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#8494FF',
+    textAlign: 'center',
+  },
+  ampmTextActive: {
+    color: 'white',
   },
   amountInput: {
     backgroundColor: '#f5f3ff',

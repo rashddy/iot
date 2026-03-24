@@ -42,7 +42,9 @@ const manualFeedRef = ref(database, 'manualFeed');
 export async function addSchedule(
   schedule: Omit<FeedingSchedule, 'id'>,
 ): Promise<string> {
-  const newRef = push(schedulesRef);
+  const deviceId = 'esp32-device-001'; // In production, get from auth/device context
+  const deviceSchedulesRef = ref(database, `schedules/${deviceId}`);
+  const newRef = push(deviceSchedulesRef);
   const id = newRef.key!;
   await set(newRef, { ...schedule, id });
   return id;
@@ -50,7 +52,8 @@ export async function addSchedule(
 
 /** Update an existing schedule */
 export async function updateSchedule(schedule: FeedingSchedule): Promise<void> {
-  await set(ref(database, `schedules/${schedule.id}`), schedule);
+  const deviceId = 'esp32-device-001';
+  await set(ref(database, `schedules/${deviceId}/${schedule.id}`), schedule);
 }
 
 /** Toggle the enabled flag of a schedule */
@@ -58,19 +61,23 @@ export async function toggleSchedule(
   id: string,
   enabled: boolean,
 ): Promise<void> {
-  await update(ref(database, `schedules/${id}`), { enabled });
+  const deviceId = 'esp32-device-001';
+  await update(ref(database, `schedules/${deviceId}/${id}`), { enabled });
 }
 
 /** Delete a schedule */
 export async function deleteSchedule(id: string): Promise<void> {
-  await remove(ref(database, `schedules/${id}`));
+  const deviceId = 'esp32-device-001';
+  await remove(ref(database, `schedules/${deviceId}/${id}`));
 }
 
 /** Subscribe to real-time schedule changes */
 export function onSchedulesChanged(
   callback: (schedules: FeedingSchedule[]) => void,
 ): () => void {
-  const unsubscribe = onValue(schedulesRef, (snapshot) => {
+  const deviceId = 'esp32-device-001';
+  const deviceSchedulesRef = ref(database, `schedules/${deviceId}`);
+  const unsubscribe = onValue(deviceSchedulesRef, (snapshot) => {
     const data = snapshot.val() as Record<string, FeedingSchedule> | null;
     const list = data ? Object.values(data) : [];
     // Sort by time ascending
@@ -78,7 +85,7 @@ export function onSchedulesChanged(
     callback(list);
   });
 
-  return () => off(schedulesRef, 'value', unsubscribe as any);
+  return () => off(deviceSchedulesRef, 'value', unsubscribe as any);
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,7 +115,9 @@ export function onHistoryChanged(
 export async function addHistoryEntry(
   entry: Omit<FeedingHistory, 'id'>,
 ): Promise<string> {
-  const newRef = push(historyRef);
+  const deviceId = 'esp32-device-001';
+  const deviceHistoryRef = ref(database, `history/${deviceId}`);
+  const newRef = push(deviceHistoryRef);
   const id = newRef.key!;
   await set(newRef, { ...entry, id });
   return id;

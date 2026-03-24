@@ -8,7 +8,7 @@ import {
     onFoodContainerChanged,
     onHistoryChanged,
     onSchedulesChanged,
-} from '@/services/firebase-service';
+} from '@/services/supabase-service';
 import type {
     DeviceStatus,
     FeedingHistory,
