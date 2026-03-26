@@ -4,10 +4,11 @@
 
 import type { FeedingHistory } from '@/types/feeder';
 import React from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
   history: FeedingHistory[];
+  onDelete?: (id: string) => void;
 }
 
 const statusColors: Record<FeedingHistory['status'], string> = {
@@ -22,7 +23,7 @@ const statusBg: Record<FeedingHistory['status'], string> = {
   skipped: '#fffbe6',
 };
 
-export default function HistoryCard({ history }: Props) {
+export default function HistoryCard({ history, onDelete }: Props) {
   const renderItem = ({ item, index }: { item: FeedingHistory; index: number }) => (
     <View style={[styles.row, index % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
       <View style={styles.timelineDot}>
@@ -44,6 +45,11 @@ export default function HistoryCard({ history }: Props) {
           {item.status}
         </Text>
       </View>
+      {onDelete ? (
+        <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
+          <Text style={styles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -172,6 +178,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Montserrat_600SemiBold',
     textTransform: 'capitalize',
+  },
+  deleteButton: {
+    marginLeft: 10,
+    backgroundColor: '#fff0f0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  deleteButtonText: {
+    color: '#f87171',
+    fontSize: 11,
+    fontFamily: 'Montserrat_600SemiBold',
   },
   emptyContainer: {
     alignItems: 'center',

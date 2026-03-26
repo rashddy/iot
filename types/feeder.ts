@@ -26,6 +26,7 @@ export interface DeviceStatus {
   lastSeen: string;    // ISO 8601
   wifiRSSI: number;    // signal strength in dBm
   uptime: number;      // seconds since boot
+  currentWeight?: number; // live loadcell reading in grams
 }
 
 /** Food container telemetry */

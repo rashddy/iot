@@ -17,6 +17,7 @@ import FoodContainerCard from '@/components/aquafeed/food-container-card';
 import HistoryCard from '@/components/aquafeed/history-card';
 import ScheduleCard from '@/components/aquafeed/schedule-card';
 import ScheduleModal from '@/components/aquafeed/schedule-modal';
+import { WeightDisplay } from '@/components/aquafeed/weight-display';
 
 import {
     useDeviceStatus,
@@ -27,6 +28,7 @@ import {
 
 import {
     addSchedule,
+    deleteHistoryEntry,
     deleteSchedule,
     toggleSchedule,
     updateSchedule,
@@ -37,8 +39,8 @@ import type { FeedingSchedule } from '@/types/feeder';
 export default function HomeScreen() {
   const { schedules } = useSchedules();
   const { history } = useHistory();
-  const { food } = useFoodContainer();
   const { status } = useDeviceStatus();
+  const { food } = useFoodContainer();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSchedule, setEditingSchedule] =
@@ -74,8 +76,27 @@ export default function HomeScreen() {
         onPress: async () => {
           try {
             await deleteSchedule(id);
-          } catch {
-            Alert.alert('Error', 'Failed to delete schedule.');
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete schedule.';
+            Alert.alert('Error', message);
+          }
+        },
+      },
+    ]);
+  }, []);
+
+  const handleDeleteHistory = useCallback(async (id: string) => {
+    Alert.alert('Delete History Entry', 'Delete this history item?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteHistoryEntry(id);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete history entry.';
+            Alert.alert('Error', message);
           }
         },
       },
@@ -134,6 +155,7 @@ export default function HomeScreen() {
         }
       >
         <FoodContainerCard food={food} />
+        <WeightDisplay />
 
         <ScheduleCard
           schedules={schedules}
@@ -143,7 +165,7 @@ export default function HomeScreen() {
           onDelete={handleDelete}
         />
 
-        <HistoryCard history={history} />
+        <HistoryCard history={history} onDelete={handleDeleteHistory} />
       </ScrollView>
 
       <ScheduleModal

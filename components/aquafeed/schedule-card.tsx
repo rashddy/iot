@@ -3,7 +3,7 @@
  */
 
 import type { FeedingSchedule } from '@/types/feeder';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     FlatList,
     StyleSheet,
@@ -28,6 +28,45 @@ export default function ScheduleCard({
   onEdit,
   onDelete,
 }: Props) {
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  const getManilaNow = () => {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = fmt.formatToParts(new Date());
+    const map: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+
+    return new Date(
+      Number.parseInt(map.year, 10),
+      Number.parseInt(map.month, 10) - 1,
+      Number.parseInt(map.day, 10),
+      Number.parseInt(map.hour, 10),
+      Number.parseInt(map.minute, 10),
+      Number.parseInt(map.second, 10),
+      0,
+    );
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
+
   // Convert 24-hour time to 12-hour format for display
   const formatTime12Hour = (time24: string) => {
     const [hours, minutes] = time24.split(':');
@@ -49,6 +88,45 @@ export default function ScheduleCard({
     
     return `${h12}:${minutes} ${ampm}`;
   };
+
+  const nextSchedule = useMemo(() => {
+    const now = getManilaNow();
+    let best: { schedule: FeedingSchedule; runAt: Date } | null = null;
+
+    for (const schedule of schedules) {
+      if (!schedule.enabled) continue;
+
+      const [hRaw, mRaw] = schedule.time.split(':');
+      const h = Number.parseInt(hRaw, 10);
+      const m = Number.parseInt(mRaw, 10);
+      if (Number.isNaN(h) || Number.isNaN(m)) continue;
+
+      const runAt = new Date(now);
+      runAt.setHours(h, m, 0, 0);
+      if (runAt.getTime() <= now.getTime()) {
+        runAt.setDate(runAt.getDate() + 1);
+      }
+
+      if (!best || runAt.getTime() < best.runAt.getTime()) {
+        best = { schedule, runAt };
+      }
+    }
+
+    if (!best) return null;
+
+    const diffMs = Math.max(0, best.runAt.getTime() - now.getTime());
+    const totalSec = Math.floor(diffMs / 1000);
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    const seconds = totalSec % 60;
+
+    return {
+      label: formatTime12Hour(best.schedule.time),
+      hours,
+      minutes,
+      seconds,
+    };
+  }, [nowMs, schedules]);
 
   const renderItem = ({ item }: { item: FeedingSchedule }) => (
     <View
@@ -99,6 +177,20 @@ export default function ScheduleCard({
           <Text style={styles.addBtnText}>+ Add</Text>
         </TouchableOpacity>
       </View>
+
+      {nextSchedule ? (
+        <View style={styles.nextRunBox}>
+          <Text style={styles.nextRunTitle}>Next feed at {nextSchedule.label}</Text>
+          <Text style={styles.nextRunValue}>
+            {nextSchedule.hours}h {nextSchedule.minutes}m {nextSchedule.seconds}s remaining
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.nextRunBox}>
+          <Text style={styles.nextRunTitle}>Next feed</Text>
+          <Text style={styles.nextRunValue}>No enabled schedules</Text>
+        </View>
+      )}
 
       {schedules.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -184,6 +276,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontFamily: 'Montserrat_600SemiBold',
+  },
+  nextRunBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ebe8ff',
+    backgroundColor: '#f7f6ff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  nextRunTitle: {
+    fontSize: 12,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#6367FF',
+  },
+  nextRunValue: {
+    marginTop: 2,
+    fontSize: 14,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#2d2d44',
   },
   list: {
     gap: 10,

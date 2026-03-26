@@ -4,7 +4,7 @@
 
 import { setFoodRemaining } from '@/services/supabase-service';
 import type { FoodContainer } from '@/types/feeder';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // Use web-compatible input
@@ -15,10 +15,16 @@ interface Props {
 }
 
 export default function FoodContainerCard({ food }: Props) {
+  const [manualAmount, setManualAmount] = useState(food.remainingGrams);
   const [inputAmount, setInputAmount] = useState(food.remainingGrams.toString());
+
+  useEffect(() => {
+    setManualAmount(food.remainingGrams);
+    setInputAmount(food.remainingGrams.toString());
+  }, [food.remainingGrams]);
   
   const percentage = food.maxCapacityGrams > 0
-    ? Math.min(100, Math.round((food.remainingGrams / food.maxCapacityGrams) * 100))
+    ? Math.min(100, Math.round((manualAmount / food.maxCapacityGrams) * 100))
     : 0;
 
   const handleSetFood = async () => {
@@ -27,12 +33,13 @@ export default function FoodContainerCard({ food }: Props) {
       Alert.alert('Invalid', `Enter a value between 0 and ${food.maxCapacityGrams} grams.`);
       return;
     }
-    
+
     try {
       await setFoodRemaining(grams);
+      setManualAmount(grams);
       Alert.alert('Success', `Food amount set to ${grams}g`);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update food amount');
+    } catch {
+      Alert.alert('Error', 'Failed to update inventory in Supabase');
     }
   };
 
@@ -54,7 +61,7 @@ export default function FoodContainerCard({ food }: Props) {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.remainingValue}>{food.remainingGrams}g</Text>
+        <Text style={styles.remainingValue}>{manualAmount}g</Text>
         <Text style={styles.remainingLabel}>Remaining in funnel</Text>
 
         <View style={styles.gaugeContainer}>
