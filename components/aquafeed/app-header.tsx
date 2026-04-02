@@ -2,19 +2,27 @@
  * AppHeader – premium header with status dot indicator.
  */
 
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React from 'react';
 import {
     StatusBar,
     StyleSheet,
     Text,
+    TouchableOpacity,
     View,
 } from 'react-native';
 
 interface Props {
   deviceOnline?: boolean;
+  lowFoodAlert?: boolean;
+  onNotificationsPress?: () => void;
 }
 
-export default function AppHeader({ deviceOnline }: Props) {
+export default function AppHeader({
+  deviceOnline,
+  lowFoodAlert,
+  onNotificationsPress,
+}: Props) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#6367FF" />
@@ -24,6 +32,16 @@ export default function AppHeader({ deviceOnline }: Props) {
           <Text style={styles.subtitle}>Smart Fish Feeder Control</Text>
         </View>
         <View style={styles.statusContainer}>
+          <View style={styles.notifyWrap}>
+            <TouchableOpacity
+              style={styles.notifyIconBox}
+              onPress={onNotificationsPress}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="notifications-none" size={18} color="#fff" />
+              {lowFoodAlert && <View style={styles.notifyDot} />}
+            </TouchableOpacity>
+          </View>
           {deviceOnline !== undefined && (
             <View style={styles.statusRow}>
               <View
@@ -71,6 +89,29 @@ const styles = StyleSheet.create({
   },
   statusContainer: {
     alignItems: 'flex-end',
+    gap: 8,
+  },
+  notifyWrap: {
+    alignItems: 'flex-end',
+  },
+  notifyIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifyDot: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff5d5d',
+    borderWidth: 1,
+    borderColor: '#6367FF',
   },
   statusRow: {
     flexDirection: 'row',

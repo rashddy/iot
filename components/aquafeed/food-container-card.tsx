@@ -4,6 +4,7 @@
 
 import { setFoodRemaining } from '@/services/supabase-service';
 import type { FoodContainer } from '@/types/feeder';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -17,6 +18,7 @@ interface Props {
 export default function FoodContainerCard({ food }: Props) {
   const [manualAmount, setManualAmount] = useState(food.remainingGrams);
   const [inputAmount, setInputAmount] = useState(food.remainingGrams.toString());
+  const isLowFood = manualAmount <= 100;
 
   useEffect(() => {
     setManualAmount(food.remainingGrams);
@@ -58,11 +60,22 @@ export default function FoodContainerCard({ food }: Props) {
           </View>
           <Text style={styles.title}>Food Container</Text>
         </View>
+        {isLowFood && (
+          <View style={styles.lowBadge}>
+            <MaterialIcons name="warning-amber" size={14} color="#fff" />
+            <Text style={styles.lowBadgeText}>Low Food</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.body}>
         <Text style={styles.remainingValue}>{manualAmount}g</Text>
         <Text style={styles.remainingLabel}>Remaining in funnel</Text>
+        {isLowFood && (
+          <Text style={styles.lowFoodCaption}>
+            Food is running low. Refill soon.
+          </Text>
+        )}
 
         <View style={styles.gaugeContainer}>
           <View style={styles.gaugeTrack}>
@@ -142,6 +155,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_700Bold',
     color: '#1e1e2e',
   },
+  lowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#e5484d',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  lowBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Montserrat_700Bold',
+  },
   body: {
     alignItems: 'center',
     marginTop: 20,
@@ -157,6 +184,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_400Regular',
     color: '#8494FF',
     marginTop: 4,
+  },
+  lowFoodCaption: {
+    marginTop: 10,
+    fontSize: 13,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#e5484d',
+    textAlign: 'center',
   },
   gaugeContainer: {
     width: '100%',

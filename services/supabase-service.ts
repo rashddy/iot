@@ -3,7 +3,7 @@
  * Every function here operates on the shared Supabase client.
  */
 
-import { supabase } from '@/config/supabase.ts';
+import { supabase } from '@/config/supabase';
 import type {
   DeviceStatus,
   FeedingHistory,
@@ -58,6 +58,7 @@ type ManualFeedRow = {
 };
 
 const DEVICE_ID = 'esp32-device-001';
+const DEVICE_OFFLINE_THRESHOLD_MS = 120000;
 let lastInventoryErrorLogAt = 0;
 
 function toNumericId(id: string): number {
@@ -93,6 +94,14 @@ function toDefaultManualFeed(): ManualFeedCommand {
   };
 }
 
+function isDeviceOnline(lastSeen: string, onlineFlag: boolean): boolean {
+  const seenAt = new Date(normalizeUtcTimestamp(lastSeen)).getTime();
+  if (Number.isNaN(seenAt)) return false;
+
+  const ageMs = Date.now() - seenAt;
+  return onlineFlag && ageMs >= 0 && ageMs < DEVICE_OFFLINE_THRESHOLD_MS;
+}
+
 function normalizeUtcTimestamp(raw: string): string {
   if (!raw) return new Date(0).toISOString();
 
@@ -115,7 +124,7 @@ export async function addSchedule(
     .from('schedules')
     .insert({
       feed_time: schedule.time,
-      min_weight: schedule.amount * 0.9,  // ESP32 expects min/max range
+      min_weight: schedule.amount * 0.9,
       max_weight: schedule.amount * 1.1,
       enabled: schedule.enabled,
     })
@@ -123,6 +132,9 @@ export async function addSchedule(
     .single()) as { data: SchedulesRow; error: SupabaseErrorLike };
 
   if (error) throw error;
+  if (!data) {
+    throw new Error('Supabase returned no row when creating a schedule.');
+  }
   return data.id.toString();
 }
 
@@ -192,7 +204,7 @@ export function onSchedulesChanged(
         const schedules: FeedingSchedule[] = (data as SchedulesRow[]).map((row: SchedulesRow) => ({
           id: row.id.toString(),
           time: row.feed_time,
-          amount: (row.min_weight + row.max_weight) / 2, // Use average for display
+          amount: (row.min_weight + row.max_weight) / 2,
           enabled: row.enabled,
         }));
 
@@ -299,6 +311,9 @@ export async function addHistoryEntry(
     .single()) as { data: FeedingHistoryRow; error: SupabaseErrorLike };
 
   if (error) throw error;
+  if (!data) {
+    throw new Error('Supabase returned no row when creating a history entry.');
+  }
   return data.id.toString();
 }
 
@@ -420,10 +435,17 @@ export async function initFoodContainer(
 export function onDeviceStatusChanged(
   callback: (status: DeviceStatus) => void,
 ): () => void {
-  const emitDeviceStatusRow = (row: DeviceStatusRow) => {
+  const emitStatusRow = (row: DeviceStatusRow | null) => {
+    if (!row) {
+      callback(toDefaultDeviceStatus());
+      return;
+    }
+
+    const lastSeen = normalizeUtcTimestamp(row.last_seen);
+
     callback({
-      online: row.online,
-      lastSeen: normalizeUtcTimestamp(row.last_seen),
+      online: isDeviceOnline(lastSeen, row.online),
+      lastSeen,
       wifiRSSI: row.wifi_rssi,
       uptime: row.uptime,
       currentWeight: row.current_weight ?? 0,
@@ -431,23 +453,24 @@ export function onDeviceStatusChanged(
   };
 
   const fetchAndEmit = async () => {
-    const { data, error } = await supabase
-      .from('device_status')
-      .select('*')
-      .eq('device_id', DEVICE_ID)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('device_status')
+        .select('*')
+        .eq('device_id', DEVICE_ID)
+        .maybeSingle();
 
-    if (error) {
-      console.warn('Device status fetch issue:', formatSupabaseError(error));
-      return;
+      if (error) {
+        console.warn('Device status fetch issue:', formatSupabaseError(error));
+        emitStatusRow(null);
+        return;
+      }
+
+      emitStatusRow((data as DeviceStatusRow | null) ?? null);
+    } catch (error) {
+      console.warn('Device status fetch issue:', formatSupabaseError(error as SupabaseErrorLike));
+      emitStatusRow(null);
     }
-
-    if (!data) {
-      callback(toDefaultDeviceStatus());
-      return;
-    }
-
-    emitDeviceStatusRow(data as DeviceStatusRow);
   };
 
   const channel = supabase
@@ -465,16 +488,10 @@ export function onDeviceStatusChanged(
       }
     });
 
-  const pollId = setInterval(() => {
-    void fetchAndEmit();
-  }, 3000);
-
-  // Initial fetch
   void fetchAndEmit();
 
   return () => {
-    clearInterval(pollId);
-    supabase.removeChannel(channel);
+    void supabase.removeChannel(channel);
   };
 }
 
@@ -484,13 +501,18 @@ export function onDeviceStatusChanged(
 
 /** Trigger a manual feed command that the ESP32 will pick up */
 export async function triggerManualFeed(amount: number): Promise<void> {
+  const command: ManualFeedCommand = {
+    trigger: true,
+    amount,
+    timestamp: new Date().toISOString(),
+  };
   const { error } = (await supabase
     .from('manual_feed')
     .upsert({
       device_id: DEVICE_ID,
-      trigger: true,
-      amount,
-      timestamp: new Date().toISOString(),
+      trigger: command.trigger,
+      amount: command.amount,
+      timestamp: command.timestamp,
     }, {
       onConflict: 'device_id'
     })) as { error: SupabaseErrorLike };
@@ -512,59 +534,53 @@ export async function clearManualFeed(): Promise<void> {
 export function onManualFeedChanged(
   callback: (cmd: ManualFeedCommand) => void,
 ): () => void {
+  const emitManualFeedRow = (row: ManualFeedRow | null) => {
+    if (!row) {
+      callback(toDefaultManualFeed());
+      return;
+    }
+
+    callback({
+      trigger: row.trigger,
+      amount: row.amount,
+      timestamp: row.timestamp,
+    });
+  };
+
+  const fetchAndEmit = async () => {
+    const { data, error } = await supabase
+      .from('manual_feed')
+      .select('*')
+      .eq('device_id', DEVICE_ID)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Manual feed fetch issue:', formatSupabaseError(error));
+      emitManualFeedRow(null);
+      return;
+    }
+
+    emitManualFeedRow((data as ManualFeedRow | null) ?? null);
+  };
+
   const channel = supabase
     .channel('manual-feed-changes')
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'manual_feed' },
+      { event: '*', schema: 'public', table: 'manual_feed', filter: `device_id=eq.${DEVICE_ID}` },
       async () => {
-        const { data, error } = await supabase
-          .from('manual_feed')
-          .select('*')
-          .eq('device_id', DEVICE_ID)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Error fetching manual feed:', error);
-          return;
-        }
-
-        if (!data) {
-          callback(toDefaultManualFeed());
-          return;
-        }
-
-        const row = data as ManualFeedRow;
-        callback({
-          trigger: row.trigger,
-          amount: row.amount,
-          timestamp: row.timestamp,
-        });
+        await fetchAndEmit();
       }
     )
-    .subscribe();
-
-  // Initial fetch
-  supabase
-    .from('manual_feed')
-    .select('*')
-    .eq('device_id', DEVICE_ID)
-    .maybeSingle()
-    .then((res: { data: ManualFeedRow | null; error: SupabaseErrorLike }) => {
-      const { data, error } = res;
-      if (!error) {
-        if (!data) {
-          callback(toDefaultManualFeed());
-          return;
-        }
-
-        callback({
-          trigger: data.trigger,
-          amount: data.amount,
-          timestamp: data.timestamp,
-        });
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        void fetchAndEmit();
       }
     });
 
-  return () => supabase.removeChannel(channel);
+  void fetchAndEmit();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }

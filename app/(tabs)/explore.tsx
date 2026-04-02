@@ -74,7 +74,7 @@ export default function DeviceScreen() {
           <Text style={styles.cardTitle}>System Info</Text>
         </View>
         <Row label="App Version" value="1.0.0" />
-        <Row label="Database" value="Firebase RTDB" />
+        <Row label="Database" value="Supabase" />
         <Row label="MCU" value="ESP32" />
         <Row label="NTP Sync" value="pool.ntp.org" />
       </View>
