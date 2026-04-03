@@ -8,6 +8,8 @@ export interface FeedingSchedule {
   id: string;
   time: string;       // HH:mm format
   amount: number;      // grams
+  minWeight?: number;  // grams
+  maxWeight?: number;  // grams
   enabled: boolean;
 }
 

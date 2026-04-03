@@ -5,11 +5,11 @@
 
 import { supabase } from '@/config/supabase';
 import type {
-  DeviceStatus,
-  FeedingHistory,
-  FeedingSchedule,
-  FoodContainer,
-  ManualFeedCommand,
+    DeviceStatus,
+    FeedingHistory,
+    FeedingSchedule,
+    FoodContainer,
+    ManualFeedCommand,
 } from '@/types/feeder';
 
 type SupabaseErrorLike = {
@@ -59,6 +59,7 @@ type ManualFeedRow = {
 
 const DEVICE_ID = 'esp32-device-001';
 const DEVICE_OFFLINE_THRESHOLD_MS = 120000;
+const DEVICE_STATUS_POLL_INTERVAL_MS = 3000;
 let lastInventoryErrorLogAt = 0;
 
 function toNumericId(id: string): number {
@@ -120,12 +121,15 @@ function normalizeUtcTimestamp(raw: string): string {
 export async function addSchedule(
   schedule: Omit<FeedingSchedule, 'id'>,
 ): Promise<string> {
+  const minWeight = schedule.minWeight ?? schedule.amount * 0.9;
+  const maxWeight = schedule.maxWeight ?? schedule.amount * 1.1;
+
   const { data, error } = (await supabase
     .from('schedules')
     .insert({
       feed_time: schedule.time,
-      min_weight: schedule.amount * 0.9,
-      max_weight: schedule.amount * 1.1,
+      min_weight: minWeight,
+      max_weight: maxWeight,
       enabled: schedule.enabled,
     })
     .select()
@@ -141,12 +145,15 @@ export async function addSchedule(
 /** Update an existing schedule */
 export async function updateSchedule(schedule: FeedingSchedule): Promise<void> {
   const scheduleId = toNumericId(schedule.id);
+  const minWeight = schedule.minWeight ?? schedule.amount * 0.9;
+  const maxWeight = schedule.maxWeight ?? schedule.amount * 1.1;
+
   const { error } = (await supabase
     .from('schedules')
     .update({
       feed_time: schedule.time,
-      min_weight: schedule.amount * 0.9,
-      max_weight: schedule.amount * 1.1,
+      min_weight: minWeight,
+      max_weight: maxWeight,
       enabled: schedule.enabled,
     })
     .eq('id', scheduleId)) as { error: SupabaseErrorLike };
@@ -205,6 +212,8 @@ export function onSchedulesChanged(
           id: row.id.toString(),
           time: row.feed_time,
           amount: (row.min_weight + row.max_weight) / 2,
+          minWeight: row.min_weight,
+          maxWeight: row.max_weight,
           enabled: row.enabled,
         }));
 
@@ -225,6 +234,8 @@ export function onSchedulesChanged(
           id: row.id.toString(),
           time: row.feed_time,
           amount: (row.min_weight + row.max_weight) / 2,
+          minWeight: row.min_weight,
+          maxWeight: row.max_weight,
           enabled: row.enabled,
         }));
         callback(schedules);
@@ -488,9 +499,15 @@ export function onDeviceStatusChanged(
       }
     });
 
+  // Fallback polling keeps UI in sync even if realtime events are delayed or blocked.
+  const pollId = setInterval(() => {
+    void fetchAndEmit();
+  }, DEVICE_STATUS_POLL_INTERVAL_MS);
+
   void fetchAndEmit();
 
   return () => {
+    clearInterval(pollId);
     void supabase.removeChannel(channel);
   };
 }

@@ -22,7 +22,7 @@ interface Props {
   schedule?: FeedingSchedule | null;
   containerRemainingGrams: number;
   onSave: (
-    data: { time: string; amount: number },
+    data: { time: string; amount: number; minWeight: number; maxWeight: number },
     options?: { keepOpen?: boolean },
   ) => Promise<void> | void;
   onClose: () => void;
@@ -32,7 +32,8 @@ type DraftSchedule = {
   hours: string;
   minutes: string;
   ampm: 'AM' | 'PM';
-  amount: string;
+  minWeight: string;
+  maxWeight: string;
 };
 
 const createDraftSchedule = (schedule?: FeedingSchedule | null): DraftSchedule => {
@@ -41,7 +42,8 @@ const createDraftSchedule = (schedule?: FeedingSchedule | null): DraftSchedule =
       hours: '8',
       minutes: '00',
       ampm: 'AM',
-      amount: '5',
+      minWeight: '4.5',
+      maxWeight: '5.5',
     };
   }
 
@@ -66,7 +68,8 @@ const createDraftSchedule = (schedule?: FeedingSchedule | null): DraftSchedule =
     hours: String(h12),
     minutes: m,
     ampm: newAmpm,
-    amount: String(schedule.amount),
+    minWeight: String(schedule.minWeight ?? Math.max(0, schedule.amount * 0.9)),
+    maxWeight: String(schedule.maxWeight ?? Math.max(0, schedule.amount * 1.1)),
   };
 };
 
@@ -104,7 +107,8 @@ export default function ScheduleModal({
   const parseDraft = (draft: DraftSchedule) => {
     const h12 = parseInt(draft.hours, 10);
     const m = parseInt(draft.minutes, 10);
-    const a = parseInt(draft.amount, 10);
+    const minWeight = parseFloat(draft.minWeight);
+    const maxWeight = parseFloat(draft.maxWeight);
 
     if (isNaN(h12) || h12 < 1 || h12 > 12) {
       throw new Error('Hours must be between 1 and 12.');
@@ -112,8 +116,14 @@ export default function ScheduleModal({
     if (isNaN(m) || m < 0 || m > 59) {
       throw new Error('Minutes must be between 0 and 59.');
     }
-    if (isNaN(a) || a <= 0 || a > 500) {
-      throw new Error('Amount must be between 1 and 500 grams.');
+    if (Number.isNaN(minWeight) || minWeight <= 0 || minWeight > 500) {
+      throw new Error('Minimum weight must be between 0.1 and 500 grams.');
+    }
+    if (Number.isNaN(maxWeight) || maxWeight <= 0 || maxWeight > 500) {
+      throw new Error('Maximum weight must be between 0.1 and 500 grams.');
+    }
+    if (maxWeight < minWeight) {
+      throw new Error('Maximum weight must be greater than or equal to minimum weight.');
     }
 
     let h24 = h12;
@@ -125,19 +135,30 @@ export default function ScheduleModal({
 
     return {
       time: `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
-      amount: a,
+      amount: (minWeight + maxWeight) / 2,
+      minWeight,
+      maxWeight,
     };
   };
 
   const handleSave = async () => {
-    const entries = drafts.map(parseDraft);
-    const totalRequested = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    let entries: Array<{ time: string; amount: number; minWeight: number; maxWeight: number }> = [];
+
+    try {
+      entries = drafts.map(parseDraft);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid schedule input.';
+      Alert.alert('Invalid', message);
+      return;
+    }
+
+    const totalRequested = entries.reduce((sum, entry) => sum + entry.maxWeight, 0);
 
     for (const entry of entries) {
-      if (entry.amount > containerRemainingGrams) {
+      if (entry.maxWeight > containerRemainingGrams) {
         Alert.alert(
           'Not enough food',
-          `Each schedule amount must be ${containerRemainingGrams}g or less because that is the current amount in the container.`,
+          `Each schedule max range must be ${containerRemainingGrams}g or less because that is the current amount in the container.`,
         );
         return;
       }
@@ -146,7 +167,7 @@ export default function ScheduleModal({
     if (totalRequested > containerRemainingGrams) {
       Alert.alert(
         'Not enough food',
-        `The total schedule amount (${totalRequested}g) exceeds the current container amount (${containerRemainingGrams}g).`,
+        `The total scheduled max range (${totalRequested.toFixed(1)}g) exceeds the current container amount (${containerRemainingGrams}g).`,
       );
       return;
     }
@@ -228,15 +249,26 @@ export default function ScheduleModal({
                   </View>
                 </View>
 
-                <Text style={styles.label}>Amount (grams)</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  value={draft.amount}
-                  onChangeText={(value) => updateDraft(index, 'amount', value)}
-                  keyboardType="number-pad"
-                  placeholder="5"
-                  placeholderTextColor="#a5a5c0"
-                />
+                <Text style={styles.label}>Food Range (grams)</Text>
+                <View style={styles.rangeRow}>
+                  <TextInput
+                    style={[styles.amountInput, styles.rangeInput]}
+                    value={draft.minWeight}
+                    onChangeText={(value) => updateDraft(index, 'minWeight', value)}
+                    keyboardType="decimal-pad"
+                    placeholder="Min"
+                    placeholderTextColor="#a5a5c0"
+                  />
+                  <Text style={styles.rangeDash}>-</Text>
+                  <TextInput
+                    style={[styles.amountInput, styles.rangeInput]}
+                    value={draft.maxWeight}
+                    onChangeText={(value) => updateDraft(index, 'maxWeight', value)}
+                    keyboardType="decimal-pad"
+                    placeholder="Max"
+                    placeholderTextColor="#a5a5c0"
+                  />
+                </View>
               </View>
             ))}
 
@@ -383,6 +415,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderWidth: 2,
     borderColor: '#f0eeff',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  rangeInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  rangeDash: {
+    width: 18,
+    textAlign: 'center',
+    marginHorizontal: 8,
+    fontSize: 20,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#6367FF',
   },
   addAnotherBtn: {
     marginTop: 12,

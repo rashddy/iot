@@ -89,6 +89,21 @@ export default function ScheduleCard({
     return `${h12}:${minutes} ${ampm}`;
   };
 
+  const formatWeight = (value: number) => {
+    return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  };
+
+  const formatScheduleAmount = (schedule: FeedingSchedule) => {
+    if (
+      typeof schedule.minWeight === 'number' &&
+      typeof schedule.maxWeight === 'number'
+    ) {
+      return `${formatWeight(schedule.minWeight)}-${formatWeight(schedule.maxWeight)}g per feed`;
+    }
+
+    return `${formatWeight(schedule.amount)}g per feed`;
+  };
+
   const nextSchedule = useMemo(() => {
     const now = getManilaNow();
     let best: { schedule: FeedingSchedule; runAt: Date } | null = null;
@@ -143,7 +158,7 @@ export default function ScheduleCard({
       />
       <View style={styles.scheduleInfo}>
         <Text style={styles.scheduleTime}>{formatTime12Hour(item.time)}</Text>
-        <Text style={styles.scheduleAmount}>{item.amount}g per feed</Text>
+        <Text style={styles.scheduleAmount}>{formatScheduleAmount(item)}</Text>
       </View>
       <View style={styles.actions}>
         <TouchableOpacity

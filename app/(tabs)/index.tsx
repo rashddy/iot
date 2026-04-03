@@ -116,7 +116,7 @@ export default function HomeScreen() {
 
   const handleSaveSchedule = useCallback(
     async (
-      data: { time: string; amount: number },
+      data: { time: string; amount: number; minWeight: number; maxWeight: number },
       options?: { keepOpen?: boolean },
     ) => {
       console.log('handleSaveSchedule called with:', data);
@@ -129,6 +129,8 @@ export default function HomeScreen() {
             ...editingSchedule,
             time: data.time,
             amount: data.amount,
+            minWeight: data.minWeight,
+            maxWeight: data.maxWeight,
           });
           console.log('Schedule updated successfully');
         } else {
@@ -136,6 +138,8 @@ export default function HomeScreen() {
           const result = await addSchedule({
             time: data.time,
             amount: data.amount,
+            minWeight: data.minWeight,
+            maxWeight: data.maxWeight,
             enabled: true,
           });
           console.log('Schedule added successfully with ID:', result);
